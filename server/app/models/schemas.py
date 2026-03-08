@@ -126,3 +126,43 @@ class WorkingMemoryState(BaseModel):
     session_id: str
     recent_messages: List[Dict[str, str]]
     last_updated: datetime
+
+
+# ============================================================================
+# PAGE & NODE MODELS
+# ============================================================================
+
+class PageResponse(BaseModel):
+    """Response model for a memory page."""
+    page_id: str
+    user_id: str
+    session_title: str
+    summary: str
+    importance_score: float
+    created_at: datetime
+    updated_at: datetime
+
+
+class NodeResponse(BaseModel):
+    """Response model for a memory node."""
+    node_id: str
+    page_id: str
+    parent_node_id: Optional[str]
+    node_type: str
+    content: str
+    importance_score: float
+    created_at: datetime
+
+
+class ExtractedNode(BaseModel):
+    """Model for an extracted node from conversation."""
+    node_type: str
+    content: str
+    importance_score: float
+
+
+class ExtractedConversation(BaseModel):
+    """Model for extracted conversation data."""
+    session_title: str
+    summary: str
+    overall_importance: float

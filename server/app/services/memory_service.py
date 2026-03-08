@@ -8,7 +8,13 @@ import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from app.core.snowflake_conn import execute_query, get_snowflake_connection
-from app.models.schemas import UserProfileResponse
+from app.models.schemas import (
+    UserProfileResponse,
+    PageResponse,
+    NodeResponse,
+    ExtractedNode,
+    ExtractedConversation
+)
 
 logger = logging.getLogger(__name__)
 
