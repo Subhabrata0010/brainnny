@@ -38,6 +38,9 @@ def retrieve_context(request: RetrieveContextRequest):
     try:
         logger.info(f"Retrieving context for user {request.user_id}")
         
+        # Ensure user exists
+        MemoryService._ensure_user_exists(request.user_id)
+        
         # Initialize retrieval service
         retrieval = HybridRetrieval()
         

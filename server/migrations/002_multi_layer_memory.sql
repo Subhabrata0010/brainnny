@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     user_id STRING NOT NULL,
     session_id STRING NOT NULL,
     summary STRING,
-    embedding VECTOR(FLOAT, 1024),
+    embedding VECTOR(FLOAT, 768),
     importance_score FLOAT DEFAULT 0.5,
     message_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS semantic_memory (
     memory_type STRING NOT NULL,  -- preference, fact, topic, skill, goal
     content STRING NOT NULL,
     confidence_score FLOAT DEFAULT 0.5,
-    embedding VECTOR(FLOAT, 1024),
+    embedding VECTOR(FLOAT, 768),
     source_episode_id STRING,  -- Reference to originating episode
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),

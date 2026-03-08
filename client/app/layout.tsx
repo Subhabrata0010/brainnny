@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { ClerkProvider } from '@clerk/nextjs';
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
 
@@ -16,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Brainnny",
-  description: "Second brain for all your LLMs",
+  title: "Brainnny - Multilayer Memory",
+  description: 'Persistent memory layer for LLM conversations',
 };
 
 export default function RootLayout({
@@ -26,12 +27,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-mono", jetbrainsMono.variable)}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
-    </html>
+    <ClerkProvider
+      signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/"
+      appearance={{
+        variables: {
+          colorPrimary: '#6366f1',
+          colorBackground: '#0f172a',
+          colorInputBackground: '#1e293b',
+          colorInputText: '#e2e8f0',
+        },
+      }}
+    >
+      <html lang="en" className={cn("font-mono", jetbrainsMono.variable)}>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        >
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

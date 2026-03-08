@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.snowflake_conn import close_connection
-from app.routers import conversation, context
+from app.routers import conversation, context, user
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +35,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(user.router)
 app.include_router(conversation.router)
 app.include_router(context.router)
 
@@ -62,6 +63,7 @@ def root():
         "architecture": "Multi-Layer Memory",
         "layers": ["working_memory", "episodic_memory", "semantic_memory", "conversation_logs"],
         "endpoints": {
+            "user": "POST /user/{user_id} - Create or get user profile",
             "store": "POST /conversation - Store conversation messages",
             "retrieve": "POST /retrieve-context - Retrieve memory context",
             "health": "GET /health",

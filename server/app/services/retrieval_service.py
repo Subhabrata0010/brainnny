@@ -125,7 +125,7 @@ class HybridRetrieval:
             e.created_at,
             VECTOR_COSINE_SIMILARITY(
                 e.embedding,
-                SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', %(query)s)
+                SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(query)s)
             ) as semantic_similarity,
             EXP(-0.00005 * DATEDIFF('second', e.created_at, CURRENT_TIMESTAMP())) as recency_score,
             LEAST(1.0, e.message_count / 20.0) as contextual_relevance
@@ -288,7 +288,7 @@ class HybridRetrieval:
             created_at,
             VECTOR_COSINE_SIMILARITY(
                 embedding,
-                SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', %(query)s)
+                SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(query)s)
             ) as similarity
         FROM semantic_memory
         WHERE user_id = %(user_id)s

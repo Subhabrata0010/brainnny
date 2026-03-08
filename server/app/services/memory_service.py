@@ -4,6 +4,7 @@ Handles episodes, semantic memory, and conversation logs.
 """
 
 import logging
+import json
 import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -21,6 +22,35 @@ logger = logging.getLogger(__name__)
 
 class MemoryService:
     """Service for multi-layer memory operations on Snowflake."""
+    
+    @staticmethod
+    def _ensure_user_exists(user_id: str) -> None:
+        """
+        Ensure a user exists in user_profile table.
+        Creates a new profile if it doesn't exist.
+        
+        Args:
+            user_id: User identifier
+        """
+        check_query = """
+        SELECT user_id FROM user_profile
+        WHERE user_id = %(user_id)s
+        """
+        
+        existing = execute_query(check_query, {"user_id": user_id})
+        
+        if not existing:
+            # Create new user profile
+            insert_query = """
+            INSERT INTO user_profile (
+                user_id, communication_style, recurring_topics, preferences, updated_at
+            )
+            SELECT 
+                %(user_id)s, NULL, ARRAY_CONSTRUCT(), OBJECT_CONSTRUCT(), CURRENT_TIMESTAMP()
+            """
+            
+            execute_query(insert_query, {"user_id": user_id}, fetch=False)
+            logger.info(f"Created new user profile for {user_id}")
     
     @staticmethod
     def store_message(
@@ -43,6 +73,9 @@ class MemoryService:
             Tuple of (message_id, episode_id)
         """
         logger.info(f"Storing message for user {user_id}, session {session_id}")
+        
+        # Ensure user exists in user_profile
+        MemoryService._ensure_user_exists(user_id)
         
         # Get or create episode
         episode_id = MemoryService._get_or_create_episode(user_id, session_id)
@@ -171,7 +204,7 @@ class MemoryService:
         # Update embedding
         update_query = """
         UPDATE episodes
-        SET embedding = SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', %(text)s),
+        SET embedding = SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(text)s),
             summary = %(summary)s,
             updated_at = CURRENT_TIMESTAMP()
         WHERE episode_id = %(episode_id)s
@@ -221,7 +254,7 @@ class MemoryService:
         SELECT
             %(memory_id)s, %(user_id)s, %(memory_type)s, %(content)s,
             %(confidence)s, %(source)s, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(),
-            SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', %(content)s)
+            SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(content)s)
         """
         
         execute_query(insert_query, {
@@ -257,11 +290,15 @@ class MemoryService:
         
         if results:
             row = results[0]
+            # Parse JSON strings from Snowflake to Python objects
+            recurring_topics = json.loads(row[2]) if row[2] and isinstance(row[2], str) else (row[2] or [])
+            preferences = json.loads(row[3]) if row[3] and isinstance(row[3], str) else (row[3] or {})
+            
             return UserProfileResponse(
                 user_id=row[0],
                 communication_style=row[1],
-                recurring_topics=row[2],
-                preferences=row[3]
+                recurring_topics=recurring_topics,
+                preferences=preferences
             )
         
         return None
@@ -363,7 +400,7 @@ class MemoryService:
                     %(content)s,
                     %(importance)s,
                     CURRENT_TIMESTAMP(),
-                    SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', %(content)s)
+                    SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(content)s)
                 """
                 
                 cursor.execute(insert_query, {
@@ -382,33 +419,50 @@ class MemoryService:
     @staticmethod
     def update_page_embedding(page_id: str):
         """
-        Update page embedding as average of its node embeddings.
+        Update page embedding by creating embedding from concatenated node content.
         
         Args:
             page_id: Page identifier
         """
-        # Aggregate node embeddings using Snowflake array functions
-        update_query = """
-        UPDATE pages
-        SET embedding = (
-            SELECT 
-                VECTOR_L2_NORMALIZE(
-                    ARRAY_AGG(embedding) WITHIN GROUP (ORDER BY created_at)
-                )[0]::VECTOR(FLOAT, 1024)
-            FROM nodes
-            WHERE page_id = %(page_id)s
-        )
+        # Get all node content and create embedding from combined text
+        get_nodes_query = """
+        SELECT content FROM nodes
         WHERE page_id = %(page_id)s
+        ORDER BY created_at
         """
         
         try:
-            execute_query(update_query, {"page_id": page_id}, fetch=False)
+            results = execute_query(get_nodes_query, {"page_id": page_id})
+            
+            if results and len(results) > 0:
+                # Concatenate node contents (limit to reasonable length)
+                combined_content = " ".join([row[0] for row in results])[:2000]
+                
+                # Update page embedding with combined content
+                update_query = """
+                UPDATE pages
+                SET embedding = SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(content)s),
+                    updated_at = CURRENT_TIMESTAMP()
+                WHERE page_id = %(page_id)s
+                """
+                execute_query(update_query, {"page_id": page_id, "content": combined_content}, fetch=False)
+            else:
+                # No nodes, use summary
+                fallback_query = """
+                UPDATE pages
+                SET embedding = SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', summary),
+                    updated_at = CURRENT_TIMESTAMP()
+                WHERE page_id = %(page_id)s
+                """
+                execute_query(fallback_query, {"page_id": page_id}, fetch=False)
+        
         except Exception as e:
-            logger.warning(f"Could not update page embedding: {e}")
+            logger.error(f"Error updating page embedding: {e}")
             # Fallback: use summary embedding
             fallback_query = """
             UPDATE pages
-            SET embedding = SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', summary)
+            SET embedding = SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', summary),
+                updated_at = CURRENT_TIMESTAMP()
             WHERE page_id = %(page_id)s
             """
             execute_query(fallback_query, {"page_id": page_id}, fetch=False)
@@ -437,7 +491,7 @@ class MemoryService:
             updated_at,
             VECTOR_COSINE_SIMILARITY(
                 embedding,
-                SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', %(query)s)
+                SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(query)s)
             ) as similarity
         FROM pages
         WHERE user_id = %(user_id)s
@@ -491,7 +545,7 @@ class MemoryService:
         # Use scoring view for ranking
         search_query = """
         WITH query_embedding AS (
-            SELECT SNOWFLAKE.CORTEX.EMBED_TEXT_1024('e5-base-v2', %(query)s) as qemb
+            SELECT SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %(query)s) as qemb
         ),
         scored_nodes AS (
             SELECT 
@@ -545,35 +599,6 @@ class MemoryService:
             ))
         
         return nodes
-    
-    @staticmethod
-    def get_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get user profile information.
-        
-        Args:
-            user_id: User identifier
-        
-        Returns:
-            User profile dictionary or None
-        """
-        query = """
-        SELECT communication_style, recurring_topics, preferences
-        FROM user_profile
-        WHERE user_id = %(user_id)s
-        """
-        
-        results = execute_query(query, {"user_id": user_id})
-        
-        if results:
-            row = results[0]
-            return {
-                "communication_style": row[0],
-                "recurring_topics": row[1],
-                "preferences": row[2]
-            }
-        
-        return None
     
     @staticmethod
     def get_open_commitments(user_id: str) -> List[Dict[str, Any]]:
