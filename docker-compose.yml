@@ -37,11 +37,6 @@ services:
       # Rate Limiting
       - RATE_LIMIT_PER_MINUTE=60
       - RATE_LIMIT_PER_HOUR=1000
-      
-      # LLM APIs (optional)
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
       - ./server/app:/app/app  # Hot reload for development
     networks:
