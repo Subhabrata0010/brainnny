@@ -1,0 +1,99 @@
+# ============================================================================
+# Docker Compose - Second Brain Development Environment
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: secondbrain-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Snowflake Configuration (provide via .env file)
+      - SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT}
+      - SNOWFLAKE_USER=${SNOWFLAKE_USER}
+      - SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD}
+      - SNOWFLAKE_WAREHOUSE=${SNOWFLAKE_WAREHOUSE}
+      - SNOWFLAKE_DATABASE=${SNOWFLAKE_DATABASE}
+      - SNOWFLAKE_SCHEMA=${SNOWFLAKE_SCHEMA}
+      
+      # Clerk Authentication
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY:-}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
+      - CLERK_FRONTEND_API=${CLERK_FRONTEND_API:-}
+      
+      # CORS
+      - CORS_ORIGINS=http://localhost:3000
+      
+      # Application Settings
+      - APP_NAME=Second Brain
+      - DEBUG=true
+      
+      # Rate Limiting
+      - RATE_LIMIT_PER_MINUTE=60
+      - RATE_LIMIT_PER_HOUR=1000
+      
+      # LLM APIs (optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+    volumes:
+      - ./server/app:/app/app  # Hot reload for development
+    networks:
+      - secondbrain-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # Frontend Client
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        - NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+        - NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+        - NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+        - NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+    container_name: secondbrain-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+      - NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+      - NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+      - NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - secondbrain-network
+    restart: unless-stopped
+
+networks:
+  secondbrain-network:
+    driver: bridge
+
+# Usage Instructions:
+# 1. Copy .env.example files to .env in both server/ and client/ directories
+# 2. Fill in your Snowflake and Clerk credentials
+# 3. Run: docker-compose up --build
+# 4. Access:
+#    - Frontend: http://localhost:3000
+#    - Backend API: http://localhost:8000
+#    - API Docs: http://localhost:8000/docs

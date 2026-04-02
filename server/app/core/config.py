@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     
+    # Clerk Authentication
+    CLERK_PUBLISHABLE_KEY: Optional[str] = None
+    CLERK_SECRET_KEY: Optional[str] = None
+    CLERK_FRONTEND_API: Optional[str] = None  # e.g., "your-domain.clerk.accounts.dev"
+    
+    # CORS Settings
+    CORS_ORIGINS: str = "*"  # Comma-separated list: "http://localhost:3000,https://yourdomain.com"
+    
     # Security
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
@@ -26,9 +34,20 @@ class Settings(BaseSettings):
     APP_NAME: str = "Second Brain"
     DEBUG: bool = False
     
+    # Rate Limiting
+    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_PER_HOUR: int = 1000
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
+    
+    @property
+    def cors_origins_list(self) -> list:
+        """Parse CORS origins into a list."""
+        if self.CORS_ORIGINS == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
 
 # Global settings instance

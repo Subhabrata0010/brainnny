@@ -6,7 +6,7 @@ Implements multi-stage retrieval pipeline.
 import logging
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
-from app.core.snowflake_conn import execute_query, get_snowflake_connection
+from app.core.snowflake_conn import execute_query, execute_query_with_in_clause, get_snowflake_connection
 from app.models.schemas import (
     CandidateEpisode, ScoredEpisode, EpisodeResponse,
     SemanticMemoryResponse, ConversationLogResponse
@@ -114,9 +114,8 @@ class HybridRetrieval:
         
         # Extract episode IDs
         candidate_ids = [c.episode_id for c in candidates]
-        ids_str = "','".join(candidate_ids)
         
-        similarity_query = f"""
+        similarity_query = """
         SELECT 
             e.episode_id,
             e.summary,
@@ -130,16 +129,18 @@ class HybridRetrieval:
             EXP(-0.00005 * DATEDIFF('second', e.created_at, CURRENT_TIMESTAMP())) as recency_score,
             LEAST(1.0, e.message_count / 20.0) as contextual_relevance
         FROM episodes e
-        WHERE e.episode_id IN ('{ids_str}')
+        WHERE e.episode_id IN ({placeholders})
           AND e.embedding IS NOT NULL
         ORDER BY semantic_similarity DESC
         LIMIT %(top_k)s
         """
         
-        results = execute_query(similarity_query, {
-            "query": query,
-            "top_k": top_k
-        })
+        results = execute_query_with_in_clause(
+            similarity_query, 
+            candidate_ids,
+            param_name="episode_id",
+            other_params={"query": query, "top_k": top_k}
+        )
         
         scored = []
         for row in results:
@@ -231,17 +232,16 @@ class HybridRetrieval:
         
         # Fetch full episode details
         episode_ids = [ep.episode_id for ep in ranked]
-        ids_str = "','".join(episode_ids)
         
-        detail_query = f"""
+        detail_query = """
         SELECT 
             episode_id, user_id, session_id, summary,
             importance_score, message_count, created_at, updated_at
         FROM episodes
-        WHERE episode_id IN ('{ids_str}')
+        WHERE episode_id IN ({placeholders})
         """
         
-        results = execute_query(detail_query, {})
+        results = execute_query_with_in_clause(detail_query, episode_ids, param_name="episode_id")
         
         episodes = []
         for row in results:

@@ -8,7 +8,7 @@ import json
 import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from app.core.snowflake_conn import execute_query, get_snowflake_connection
+from app.core.snowflake_conn import execute_query, execute_query_with_in_clause, get_snowflake_connection
 from app.models.schemas import (
     UserProfileResponse,
     PageResponse,
@@ -565,7 +565,7 @@ class MemoryService:
                 ) as combined_score
             FROM nodes n
             JOIN pages p ON n.page_id = p.page_id
-            WHERE n.page_id IN (%(page_ids)s)
+            WHERE n.page_id IN ({placeholders})
               AND p.user_id = %(user_id)s
         )
         SELECT 
@@ -576,15 +576,16 @@ class MemoryService:
         LIMIT %(top_k)s
         """
         
-        # Convert list to comma-separated string for SQL IN clause
-        page_ids_str = "','".join(page_ids)
-        
-        results = execute_query(search_query, {
-            "query": query,
-            "page_ids": page_ids_str,
-            "user_id": user_id,
-            "top_k": top_k
-        })
+        results = execute_query_with_in_clause(
+            search_query,
+            page_ids,
+            param_name="page_id",
+            other_params={
+                "query": query,
+                "user_id": user_id,
+                "top_k": top_k
+            }
+        )
         
         nodes = []
         for row in results:

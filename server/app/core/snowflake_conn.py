@@ -68,6 +68,43 @@ def execute_query(query: str, params: dict = None, fetch: bool = True):
         cursor.close()
 
 
+def execute_query_with_in_clause(query_template: str, ids: list, param_name: str = "ids", other_params: dict = None):
+    """
+    Execute a query with IN clause safely.
+    
+    Snowflake requires special handling for IN clauses with parameterized queries.
+    This function generates safe SQL with individual placeholders for each ID.
+    
+    Args:
+        query_template: SQL query with {placeholders} for IN clause
+        ids: List of IDs to include in IN clause
+        param_name: Name of the parameter in the query
+        other_params: Other parameters for the query
+    
+    Returns:
+        Query results
+    
+    Example:
+        query = "SELECT * FROM table WHERE id IN ({placeholders})"
+        results = execute_query_with_in_clause(query, ['id1', 'id2'], other_params={'user_id': 'user123'})
+    """
+    if not ids:
+        return []
+    
+    # Create placeholders like: %(id_0)s, %(id_1)s, %(id_2)s
+    placeholders = ", ".join([f"%({param_name}_{i})s" for i in range(len(ids))])
+    
+    # Build the final query by replacing {placeholders}
+    final_query = query_template.replace("{placeholders}", placeholders)
+    
+    # Build parameters dictionary
+    params = other_params.copy() if other_params else {}
+    for i, id_val in enumerate(ids):
+        params[f"{param_name}_{i}"] = id_val
+    
+    return execute_query(final_query, params)
+
+
 def close_connection():
     """Close the Snowflake connection."""
     global _connection
