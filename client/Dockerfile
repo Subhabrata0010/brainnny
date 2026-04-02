@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package.json package-lock.json* bun.lock* ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN bun ci --only=production
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
@@ -43,7 +43,7 @@ ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=$NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
 ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=$NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
 
 # Build the application
-RUN npm run build
+RUN bun run build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
