@@ -1,5 +1,5 @@
 # ============================================================================
-# Frontend Dockerfile - Second Brain Client (Multi-stage build)
+# Frontend Dockerfile - Second Brain Client (Multi-stage build with Bun)
 # ============================================================================
 
 # Stage 1: Dependencies
@@ -7,16 +7,26 @@ FROM node:20-alpine AS deps
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* bun.lock* ./
+# Install Bun
+RUN apk add --no-cache curl unzip && \
+    curl -fsSL https://bun.sh/install | bash && \
+    ln -s /root/.bun/bin/bun /usr/local/bin/bun
 
-# Install dependencies
-RUN bun ci --only=production
+# Copy package files
+COPY package.json bun.lock* ./
+
+# Install dependencies with Bun
+RUN bun install --frozen-lockfile --production
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+
+# Install Bun in builder stage
+RUN apk add --no-cache curl unzip && \
+    curl -fsSL https://bun.sh/install | bash && \
+    ln -s /root/.bun/bin/bun /usr/local/bin/bun
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -28,10 +38,10 @@ COPY . .
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ARG CLERK_SECRET_KEY
 ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL
-ARG NEXT_PUBLIC_CLERK_SIGN_UP_URL
-ARG NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
-ARG NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
+ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+ARG NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+ARG NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+ARG NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
 
 # Set environment variables for build
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -42,7 +52,7 @@ ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL=$NEXT_PUBLIC_CLERK_SIGN_UP_URL
 ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=$NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
 ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=$NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
 
-# Build the application
+# Build the application with Bun
 RUN bun run build
 
 # Stage 3: Runner
